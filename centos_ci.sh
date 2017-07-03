@@ -25,7 +25,7 @@ set -e
 function load_jenkins_vars() {
   if [ -e "jenkins-env" ]; then
     cat jenkins-env \
-      | grep -E "(JENKINS_URL|GIT_BRANCH|GIT_COMMIT|BUILD_NUMBER|ghprbSourceBranch|ghprbActualCommit|BUILD_URL|ghprbPullId|GH_TOKEN|CICO_API_KEY|JOB_NAME)=" \
+      | grep -E "(JENKINS_URL|GIT_BRANCH|GIT_COMMIT|BUILD_NUMBER|ghprbSourceBranch|ghprbActualCommit|BUILD_URL|ghprbPullId|GH_TOKEN|CICO_API_KEY|API_TOKEN|JOB_NAME|RELEASE_VERSION|MILESTONE_ID|GITHUB_TOKEN)=" \
       | sed 's/^/export /g' \
       > ~/.jenkins-env
     source ~/.jenkins-env
@@ -41,8 +41,13 @@ function install_core_deps() {
   # Get all the deps in
   yum -y install gcc \
                  make \
+                 tar \
+                 zip \
                  git \
                  curl
+
+  # Symlink for gnutar required for progrium/gh-release tool
+  ln -s tar /usr/bin/gnutar
 
   echo 'CICO: Core dependencies installed'
 }
@@ -208,6 +213,24 @@ function docs_tar_upload() {
   echo "Find docs tar here http://artifacts.ci.centos.org/minishift/minishift/docs/$LATEST."
 }
 
+function bump_to_release_version() {
+  # Set Terminal
+  export TERM=xterm-256color
+  # Add git a/c identity
+  git config user.email "budhram.gurung01@gmail.com"
+  git config user.name "Budh Ram Gurung"
+  # Export GITHUB_ACCESS_TOKEN
+  export GITHUB_ACCESS_TOKEN=$GH_TOKEN
+  # Create master branch as git clone in CI doesn't create it
+  git checkout -b master
+  # Bump version and commit
+  sed -i "s|MINISHIFT_VERSION = .*|MINISHIFT_VERSION = $RELEASE_VERSION|" Makefile
+  git add Makefile
+  git commit -m "cut v$RELEASE_VERSION"
+  # Push update
+  git push https://budhrg:$GH_TOKEN@github.com/budhrg/minishift master
+}
+
 if [[ "$UID" = 0 ]]; then
   load_jenkins_vars;
   prepare_ci_user;
@@ -224,6 +247,18 @@ else
     cd gopath/src/github.com/minishift/minishift
     make gen_adoc_tar IMAGE_UID=$(id -u)
     docs_tar_upload $PASS
+  elif [[ "$JOB_NAME" = "minishift-release" ]]; then
+    prepare;
+    cd gopath/src/github.com/minishift/minishift
+    bump_to_release_version;
+    # Release the version
+    make release
+
+    echo "MILESTONE_ID    := $MILESTONE_ID"
+
+    echo "Triggering mock doc build"
+    curl -H "$(curl --user minishift:$API_TOKEN 'https://ci.centos.org//crumbIssuer/api/xml?xpath=concat(//crumbRequestField,":",//crumb)')" \
+                 -X POST https://ci.centos.org/job/minishift-test-job/build --user "minishift:$API_TOKEN"
   else
     setup_kvm_docker_machine_driver;
     prepare;

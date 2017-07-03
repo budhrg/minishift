@@ -130,7 +130,7 @@ release: clean fmtcheck test prerelease $(GOPATH)/bin/gh-release cross
 	gnutar -zcf release/minishift-$(MINISHIFT_VERSION)-linux-amd64.tgz LICENSE README.adoc -C $(BUILD_DIR)/linux-amd64 minishift
 	zip -j release/minishift-$(MINISHIFT_VERSION)-windows-amd64.zip LICENSE README.adoc $(BUILD_DIR)/windows-amd64/minishift.exe
 	gh-release checksums sha256
-	gh-release create minishift/minishift $(MINISHIFT_VERSION) master v$(MINISHIFT_VERSION)
+	gh-release create budhrg/minishift $(MINISHIFT_VERSION) master v$(MINISHIFT_VERSION)
 
 .PHONY: cross
 cross: $(BUILD_DIR)/darwin-amd64/minishift $(BUILD_DIR)/linux-amd64/minishift $(BUILD_DIR)/windows-amd64/minishift.exe
